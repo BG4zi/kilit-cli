@@ -1,6 +1,5 @@
 # kilit-cli
 
-This is a cli based password manager written in Rust.
 Rust dili ile yazılmış basit bir komut satırı arayüzü tabanlı şifre yöneticisi.
 
 
