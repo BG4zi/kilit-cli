@@ -11,11 +11,13 @@ use std::fs::OpenOptions;
 use std::env;
 use std::process::Command;
 
-
+// Struct for parsing Arguments
 struct RunArgs {
-	 pub conf: String
+	 pub conf: String,
+	 pub prompt: String,
 }
 
+// Struct for parsing each line of the file
 struct Block {
 	 pub product: String,
 	 pub name: String,
@@ -23,7 +25,7 @@ struct Block {
 }
 
 
-// Define a simple autocompleter
+// Main autocompleter
 struct MainCompleter;
 impl Completer for MainCompleter {
     type Candidate = Pair;
@@ -41,6 +43,7 @@ impl Completer for MainCompleter {
     }
 }
 
+// Autocompleter
 struct GoCompleter;
 impl Completer for GoCompleter {
     type Candidate = Pair;
@@ -59,7 +62,7 @@ impl Completer for GoCompleter {
 }
 
 
-// Define a helper struct that includes all required traits
+// Main helper struct that includes all required traits
 struct MainHelper;
 impl Helper for MainHelper {}
 impl Completer for MainHelper {
@@ -69,7 +72,7 @@ impl Completer for MainHelper {
     }
 }
 
-// Implement required traits with empty behavior
+// ...
 impl Hinter for MainHelper {
     type Hint = String;
     fn hint(&self, _line: &str, _pos: usize, _ctx: &rustyline::Context) -> Option<String> {
@@ -80,7 +83,7 @@ impl Hinter for MainHelper {
 impl Highlighter for MainHelper {}
 impl Validator for MainHelper {}
 
-// Define a helper struct that includes all required traits
+// helper struct that includes all required traits
 struct GoHelper;
 impl Helper for GoHelper {}
 impl Completer for GoHelper {
@@ -90,7 +93,7 @@ impl Completer for GoHelper {
     }
 }
 
-// Implement required traits with empty behavior
+// ...
 impl Hinter for GoHelper {
     type Hint = String;
     fn hint(&self, _line: &str, _pos: usize, _ctx: &rustyline::Context) -> Option<String> {
@@ -102,6 +105,7 @@ impl Highlighter for GoHelper {}
 impl Validator for GoHelper {}
 
 
+// Function that parses args as the struct
 fn get_args() -> RunArgs {
 
 	 let home_dir = env::var("HOME").expect("HOME environment variable not set");
@@ -118,18 +122,32 @@ fn get_args() -> RunArgs {
 				 .required(false)
 				 .default_missing_value("$HOME/.kilit")
 				 .default_value(&default_conf)
-				 .help("set the configuration file path"))
+				 .help("Set the configuration file path \n\t(Example usage: \"./kilit -c \"$HOME/.mypassfile\"\") and don't use ~ for home dir it crashes the tool"))
+		  .arg(Arg::new("prompt")
+				 .short('p')
+				 .long("prompt")
+				 .takes_value(true)
+				 .required(false)
+				 .default_missing_value("")
+				 .default_value("")				 
+			 .help("Instead of opening a new shell the commands will be written using this argument \n\t(Example usage kilit -c \"~/.adana\" -p \"go passwd  list name bgc\" \n                  kilit -c \"~/.adana\" -p \"create passwd\")"))
 		  .get_matches();
-	 
+     	 	 
 	 let conf = matches
 		  .value_of("conf")
 		  .unwrap()
 		  .to_owned();
+
+	 let prompt = matches
+		  .value_of("prompt")
+		  .unwrap()
+		  .to_owned();
 	 
-	 RunArgs {conf}
+	 RunArgs {conf, prompt}
 }
 
 
+// Edits a specified line
 fn edit(file_path: &String, _args: &Vec<String>, password: &String) {
 	 let lines = crypto::load_encrypted_from_file(file_path).unwrap();
 	 let mut blocks: Vec<Block> = Vec::new();	 
@@ -179,6 +197,7 @@ fn edit(file_path: &String, _args: &Vec<String>, password: &String) {
     }
 }
 
+// Lists the lines according to an SQL-esque prompt
 fn list(file_path: &String, args: &Vec<String>, password: &String) -> Result<(), ()> {
 
 	 let lines = crypto::load_encrypted_from_file(file_path).unwrap();	 
@@ -241,10 +260,12 @@ fn list(file_path: &String, args: &Vec<String>, password: &String) -> Result<(),
 	 Ok(())
 }
 
+// Adds a new line
 fn add(data: &String, password: &String, file_path: &String) {
 	 let _text = crypto::new_data(data, &password, &file_path);
 }
 
+// Create a new config file with a verification line
 fn create(password: String, file_path: &String) {
 	 let mut _file = OpenOptions::new()
         .read(true)       // Allow reading
@@ -261,6 +282,7 @@ fn create(password: String, file_path: &String) {
 }
 
 
+// Opens the file and verifies the password
 fn go(password: String, file_path: &String) {
 	 let  lines = crypto::load_encrypted_from_file(file_path).unwrap();
 	 
@@ -321,7 +343,7 @@ fn go(password: String, file_path: &String) {
 	 }
 }
 
-/*
+/* FOR TESTING smth
 fn main() {
 let password = "a";
 let data = rpassword::prompt_password("Password: ").unwrap();
@@ -336,43 +358,76 @@ println!("DEC: {datum}", datum = crypto::decrypt_data(&enc, password).unwrap());
 }
 */
 
+// MAIN FUNC 
 fn main() -> Result<(), ()> {
 
 	 let args = get_args();
 
-
 	 let file_path = args.conf;
 
-	 let mut rl = Editor::new().unwrap();
-	 
-    rl.set_helper(Some(MainHelper));
+	 // Example usages
+	 // kilit -c "~/.adana" -p "go passwd list name bgc"
+	 // kilit -c "~/.adana" -p "create passwd"
+	 if args.prompt != "" {
+		  let prompt: Vec<String> = args.prompt
+				.split_ascii_whitespace()
+				.map(|s| s.to_string()).collect();
 
-    loop {
-        match rl.readline("> ") {
-            Ok(line) => {
-                let input = line.trim();
-                if input == "exit" {
-                    println!("Goodbye!");
-                    break;
-                } else if input == "create" {
-						  let password = rpassword::prompt_password("Password: ").unwrap();
-						  create(password, &file_path);
-					 } else if input == "go" {
-						  let password = rpassword::prompt_password("Password: ").unwrap();
-						  go(password, &file_path);
-					 } else {
-						  println!("{input} is not an existant command");
+		  if prompt[0] == "go" {
+				let passwd = prompt[1].clone();
+				if prompt[2] == "list" {
+					 list(&file_path, &prompt[3..].to_vec(), &passwd).expect("Insufficient argument");
+				} else if prompt[2] == "add" {
+					 let product = prompt[3].clone();
+					 let name = prompt[4].clone();
+					 let pass = prompt[5].clone();
+
+					 let data = product + " : " + &name + " : " + &pass;
+					 
+					 add(&data, &passwd, &file_path);
+				}
+				
+		  }
+		  if prompt[0] == "create" {
+				let passwd = prompt[1].clone();
+				create(passwd, &file_path);
+		  }
+
+	 }
+
+	 else {
+
+		  let mut rl = Editor::new().unwrap();
+	 
+		  rl.set_helper(Some(MainHelper));
+		  
+		  loop {
+				match rl.readline("> ") {
+					 Ok(line) => {
+						  let input = line.trim();
+						  if input == "exit" {
+								println!("Goodbye!");
+								break;
+						  } else if input == "create" {
+								let password = rpassword::prompt_password("Password: ").unwrap();
+								create(password, &file_path);
+						  } else if input == "go" {
+								let password = rpassword::prompt_password("Password: ").unwrap();
+								go(password, &file_path);
+						  } else {
+								println!("{input} is not an existant command");
+						  }
 					 }
-            }
-            Err(ReadlineError::Eof) | Err(ReadlineError::Interrupted) => {
-                println!("Goodbye!");
-                break;
-            }
-            Err(err) => {
-                println!("Error: {:?}", err);
-                break;
-            }
-        }
-}
+					 Err(ReadlineError::Eof) | Err(ReadlineError::Interrupted) => {
+						  println!("Goodbye!");
+						  break;
+					 }
+					 Err(err) => {
+						  println!("Error: {:?}", err);
+						  break;
+					 }
+				}
+		  }
+	 }
 	 Ok(())
 }
